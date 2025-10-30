@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  kashfiles:
+    build: .
+    container_name: kash-files
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CF_TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    ports:
+      - "3000:3000"  # local debugging only; Cloudflare Tunnel handles external traffic
+    # optional volume if you want to persist cache or uploads
+    volumes:
+      - .:/app

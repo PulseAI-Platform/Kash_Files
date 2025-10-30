@@ -1,0 +1,25 @@
+{
+  "name": "kash-files",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.917.0",
+    "@nuxt/devtools": "^2.6.5",
+    "argon2": "^0.44.0",
+    "jsonwebtoken": "^9.0.2",
+    "nuxt": "^4.2.0",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.9.2"
+  }
+}
