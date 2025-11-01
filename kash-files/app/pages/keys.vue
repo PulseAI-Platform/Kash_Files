@@ -53,7 +53,7 @@
       </div>
     </div>
 
-    <!-- New Key Display -->
+    <!-- New Key Display with QR Code -->
     <div v-if="createdKey" class="success-section">
       <div class="success-card">
         <div class="success-header">
@@ -80,8 +80,77 @@
           </button>
         </div>
         
-        <button @click="createdKey = null" class="dismiss-btn">
-          Dismiss
+        <!-- Mobile App Configuration Section -->
+        <div class="mobile-config-section">
+          <div class="config-divider"></div>
+          
+          <h4 class="config-title">Add to Mobile Apps</h4>
+          <p class="config-subtitle">Use this configuration to add this Kash Files instance to your mobile or desktop apps</p>
+          
+          <!-- Tab selector -->
+          <div class="config-tabs">
+            <button
+              @click="configDisplayMode = 'qr'"
+              :class="['config-tab', { active: configDisplayMode === 'qr' }]"
+            >
+              📱 Mobile (QR Code)
+            </button>
+            <button
+              @click="configDisplayMode = 'json'"
+              :class="['config-tab', { active: configDisplayMode === 'json' }]"
+            >
+              💻 Desktop (JSON)
+            </button>
+          </div>
+          
+          <!-- QR Code Display -->
+          <div v-if="configDisplayMode === 'qr'" class="qr-section">
+            <div class="qr-container">
+              <canvas ref="filesQrContainer"></canvas>
+            </div>
+            <div class="qr-instructions">
+              <p class="instruction-title">Instructions:</p>
+              <ol class="instruction-list">
+                <li>Open Kash Stash app on your phone</li>
+                <li>Go to Settings → File Storage</li>
+                <li>Tap "Add Files Instance"</li>
+                <li>Scan this QR code</li>
+              </ol>
+            </div>
+          </div>
+          
+          <!-- JSON Config Display -->
+          <div v-if="configDisplayMode === 'json'" class="json-section">
+            <div class="config-json-container">
+              <pre class="config-json">{{ formattedFilesConfig }}</pre>
+              <button 
+                @click="copyFilesConfig" 
+                class="copy-config-btn"
+                :class="{ copied: copiedConfig }"
+              >
+                <svg v-if="!copiedConfig" class="copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <svg v-else class="check-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                <span>{{ copiedConfig ? 'Copied!' : 'Copy' }}</span>
+              </button>
+            </div>
+            <div class="json-instructions">
+              <p class="instruction-title">Instructions:</p>
+              <ol class="instruction-list">
+                <li>Copy the configuration above</li>
+                <li>Open Kash Stash desktop app</li>
+                <li>Go to Settings → File Storage</li>
+                <li>Click "Add from JSON" and paste</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+        
+        <button @click="dismissCreatedKey" class="dismiss-btn">
+          Done
         </button>
       </div>
     </div>
@@ -192,6 +261,9 @@
 </template>
 
 <script setup>
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import QRCode from 'qrcode'
+
 // Auth state
 const authLoading = ref(true)
 const authenticated = ref(false)
@@ -204,6 +276,11 @@ const successMessage = ref('')
 const createdKey = ref(null)
 const revokingKeys = ref(new Set())
 
+// Mobile config state
+const filesQrContainer = ref(null)
+const copiedConfig = ref(false)
+const configDisplayMode = ref('qr') // 'qr' or 'json'
+
 // Form data
 const newKey = ref({
   name: '',
@@ -212,6 +289,20 @@ const newKey = ref({
 
 // Keys list
 const keys = ref([])
+
+// Computed for formatted config
+const formattedFilesConfig = computed(() => {
+  if (!createdKey.value) return ''
+  
+  const filesConfig = {
+    type: 'kashFiles',
+    name: createdKey.value.name || `Kash Files - ${new Date().toISOString().split('T')[0]}`,
+    url: window.location.origin,
+    key: createdKey.value.key
+  }
+  
+  return JSON.stringify(filesConfig, null, 2)
+})
 
 // Auth check - move to onMounted
 onMounted(async () => {
@@ -232,6 +323,22 @@ onMounted(async () => {
   }
 })
 
+// Generate QR code when key is created
+watch(createdKey, async (newKey) => {
+  if (newKey) {
+    await nextTick()
+    await generateFilesQRCode()
+  }
+})
+
+// Regenerate QR when switching to QR tab
+watch(configDisplayMode, async (mode) => {
+  if (mode === 'qr' && createdKey.value) {
+    await nextTick()
+    await generateFilesQRCode()
+  }
+})
+
 // Auto-clear messages
 watch(error, (newError) => {
   if (newError) {
@@ -249,7 +356,51 @@ watch(successMessage, (newMessage) => {
   }
 })
 
-// Load all keys - UPDATED to remove hardcoded API key
+// Generate QR code for files config
+async function generateFilesQRCode() {
+  if (!filesQrContainer.value || !createdKey.value) return
+  
+  const filesConfig = {
+    type: 'kashFiles',
+    name: createdKey.value.name || `Kash Files - ${new Date().toISOString().split('T')[0]}`,
+    url: window.location.origin,
+    key: createdKey.value.key
+  }
+  
+  try {
+    await QRCode.toCanvas(
+      filesQrContainer.value,
+      JSON.stringify(filesConfig),
+      {
+        width: 200,
+        margin: 0,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        },
+        errorCorrectionLevel: 'M'
+      }
+    )
+  } catch (error) {
+    console.error('Failed to generate QR code:', error)
+  }
+}
+
+// Copy files config
+function copyFilesConfig() {
+  navigator.clipboard.writeText(formattedFilesConfig.value)
+  copiedConfig.value = true
+  setTimeout(() => copiedConfig.value = false, 2000)
+}
+
+// Dismiss created key
+function dismissCreatedKey() {
+  createdKey.value = null
+  copiedConfig.value = false
+  configDisplayMode.value = 'qr'
+}
+
+// Load all keys
 async function loadKeys() {
   try {
     loading.value = true
@@ -264,7 +415,7 @@ async function loadKeys() {
   }
 }
 
-// Create new API key - UPDATED to remove hardcoded API key
+// Create new API key
 async function createKey() {
   try {
     creating.value = true
@@ -291,7 +442,7 @@ async function createKey() {
   }
 }
 
-// Revoke API key - UPDATED to remove hardcoded API key
+// Revoke API key
 async function revokeKey(keyToRevoke) {
   if (!confirm('Are you sure you want to revoke this key? This action cannot be undone.')) {
     return
@@ -849,5 +1000,124 @@ useHead({
   to {
     transform: rotate(360deg);
   }
+}
+.mobile-config-section {
+  margin-top: 2rem;
+}
+
+.config-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+.config-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.config-subtitle {
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.config-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.config-tab {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.config-tab.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.qr-section,
+.json-section {
+  animation: fadeIn 0.2s ease-in;
+}
+
+.qr-container {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.config-json-container {
+  position: relative;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.config-json {
+  padding: 1rem;
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.875rem;
+  color: #111827;
+  overflow-x: auto;
+}
+
+.copy-config-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copy-config-btn:hover {
+  background: #f3f4f6;
+}
+
+.copy-config-btn.copied {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.instruction-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.instruction-list {
+  list-style: decimal;
+  margin-left: 1.5rem;
+  color: #6b7280;
+}
+
+.instruction-list li {
+  margin-bottom: 0.25rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>

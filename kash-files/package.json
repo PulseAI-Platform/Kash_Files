@@ -15,11 +15,13 @@
     "argon2": "^0.44.0",
     "jsonwebtoken": "^9.0.2",
     "nuxt": "^4.2.0",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.22",
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^24.9.2"
+    "@types/node": "^24.9.2",
+    "@types/qrcode": "^1.5.6"
   }
 }
